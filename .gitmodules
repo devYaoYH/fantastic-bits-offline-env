@@ -1,0 +1,3 @@
+[submodule "cg-brutaltester"]
+	path = cg-brutaltester
+	url = git@github.com:devYaoYH/cg-brutaltester-fantastic-bits.git
