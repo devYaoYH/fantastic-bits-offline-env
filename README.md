@@ -42,3 +42,9 @@ jar cmvf META-INF/MANIFEST.MF referee.jar *.class
 
 This should result in a `referee.jar` file created in `/build` directory and should be copied out into the base git repo directory where one can then run the running instruction command verbatim (else one could just modify and direct the referee execution command appropriately to the referee.jar file).
 
+## Example Java Agent using Referee
+
+`java/com/codingame/agent/mctsPlayer.java` contains wrapper code for an example agent which initializes a Referee object and interacts with it via input/output byte streams to simulate game turns.
+
+Test the player by running the `compileAndTestJavaPlayer.sh` bash script. This generates a `mcts.jar` executable which we have ignored in the .gitignore.
+
