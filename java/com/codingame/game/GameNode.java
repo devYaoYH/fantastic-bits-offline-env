@@ -98,10 +98,11 @@ public class GameNode {
         while (s.hasNextLine()) {
             String line = s.nextLine();
             sb.append(line + "\n");
-            System.err.println("[Simulator] read line: " + line);
+            // System.err.println("[Simulator] read line: " + line);
             numLinesRead++;
         }
         this.sw.getBuffer().setLength(0);
+        s.close();
         return numLinesRead;
     }
 
@@ -206,11 +207,11 @@ public class GameNode {
         double reward = 0.0;
         executeCommand("SET_PLAYER_OUTPUT", List.of(wa.action1, wa.action2));
         /*
-        executeCommand("GET_RECENT_COLLISIONS", Collections.emptyList());
-        String collisions = waitForSimulatorOutput();
-        executeCommand("GET_SCORES", Collections.emptyList());
-        String scores = waitForSimulatorOutput();
-        */
+         * executeCommand("GET_RECENT_COLLISIONS", Collections.emptyList());
+         * String collisions = waitForSimulatorOutput();
+         * executeCommand("GET_SCORES", Collections.emptyList());
+         * String scores = waitForSimulatorOutput();
+         */
         this.actionSequence.add(wa);
         // We clear the list of actions after taking one as this means we're on to the next player
         permissibleActions = new ArrayList<>();

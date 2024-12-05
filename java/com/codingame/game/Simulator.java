@@ -1901,6 +1901,13 @@ public class Simulator extends MultiReferee {
 
     public static List<Vector> generateRadialUnitVectors(int num) {
         List<Vector> vectors = new ArrayList<>();
+        double angleIncrement = 2 * Math.PI / num;
+        for (int i = 0; i < num; i++) {
+            double angle = i * angleIncrement;
+            double x = Math.cos(angle);
+            double y = Math.sin(angle);
+            vectors.add(new Vector(x, y));
+        }
         return vectors;
     }
 
@@ -1908,7 +1915,10 @@ public class Simulator extends MultiReferee {
         List<String> actions = new ArrayList<>();
         System.err.println(String.format("Generating moves for pod %s", pod));
 
-        List<Vector> radialVectors = generateRadialUnitVectors(16);
+        List<Vector> radialVectors = generateRadialUnitVectors(15);
+
+        // Always add a default PAUSE options.
+        actions.add(String.format("MOVE %.0f %.0f %d", pod.position.x, pod.position.y, 150));
 
         // Generate throws
         if (pod.snaffle != null) {
@@ -1917,12 +1927,13 @@ public class Simulator extends MultiReferee {
                 actions.add(String.format("THROW %.0f %.0f %d", dest.x, dest.y, 500));
             }
         }
-
-        // Generate movements
-        for (Vector v : radialVectors) {
-            Vector dest = pod.position.add(v.mult(150));
-            actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 150));
-            actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 75));
+        // Generate movements: if we have a snaffle, throw it!
+        else {
+            for (Vector v : radialVectors) {
+                Vector dest = pod.position.add(v.mult(150));
+                actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 150));
+                actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 75));
+            }
         }
 
         for (Snaffle s : snaffles) {
@@ -2786,8 +2797,8 @@ abstract class AbstractReferee {
             case UPDATE_INTERNAL_STATE:
                 // First line is the score and magic.
                 String[] info = s.nextLine().split(" ");
-                int score[] = {Integer.parseInt(info[0]), Integer.parseInt(info[1])};
-                int magic[] = {Integer.parseInt(info[2]), Integer.parseInt(info[3])};
+                int score[] = {Integer.parseInt(info[0]), Integer.parseInt(info[2])};
+                int magic[] = {Integer.parseInt(info[1]), Integer.parseInt(info[3])};
                 for (int p = 0; p < 2; ++p) {
                     updatePlayer(p, score[p], magic[p]);
                 }
