@@ -1899,20 +1899,59 @@ public class Simulator extends MultiReferee {
         return score;
     }
 
+    public static List<Vector> generateRadialUnitVectors(int num) {
+        List<Vector> vectors = new ArrayList<>();
+        return vectors;
+    }
+
     private List<String> getPodActions(Pod pod, Player player) {
         List<String> actions = new ArrayList<>();
+        System.err.println(String.format("Generating moves for pod %s", pod));
+
+        List<Vector> radialVectors = generateRadialUnitVectors(16);
 
         // Generate throws
+        if (pod.snaffle != null) {
+            for (Vector v : radialVectors) {
+                Vector dest = pod.position.add(v.mult(500));
+                actions.add(String.format("THROW %.0f %.0f %d", dest.x, dest.y, 500));
+            }
+        }
 
         // Generate movements
-        System.err.println(String.format("Generating moves for pod %s", pod));
-        actions.add(String.format("MOVE %.0f %.0f %d", pod.position.x, pod.position.y, 100));
-        actions.add(String.format("MOVE %.0f %.0f %d", pod.position.x + 10, pod.position.y + 10, 100));
+        for (Vector v : radialVectors) {
+            Vector dest = pod.position.add(v.mult(150));
+            actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 150));
+            actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 75));
+        }
 
-        // Generate Flippendo
-        // Generate Accio
+        for (Snaffle s : snaffles) {
+            // Generate Flipendo
+            if (player.magic >= FLIPENDO_MAGIC) {
+                actions.add(String.format("FLIPENDO %d", s.id));
+            }
+            // Generate Accio
+            if (player.magic >= ACCIO_MAGIC) {
+                actions.add(String.format("ACCIO %d", s.id));
+            }
+        }
         // Generate Petrificus
-        // Generate Oblivate
+        for (Bludger b : bludgers) {
+            if (player.magic >= PETRIFICUS_MAGIC) {
+                actions.add(String.format("PETRIFICUS %d", b.id));
+            }
+            // Generate Oblivate
+            if (player.magic >= OBLIVIATE_MAGIC) {
+                actions.add(String.format("OBLIVATE %d", b.id));
+            }
+        }
+        for (Pod p : pods) {
+            if (p.player != player) {
+                if (player.magic >= PETRIFICUS_MAGIC) {
+                    actions.add(String.format("PETRIFICUS %d", p.id));
+                }
+            }
+        }
 
         return actions;
     }
