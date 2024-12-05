@@ -1,6 +1,10 @@
 .DS_Store
 build
+deploy/java
+deploy/*.java
+Deploy.java
 logs
 cg-brutaltester/target
 mcts.jar
 **/*.swp
+

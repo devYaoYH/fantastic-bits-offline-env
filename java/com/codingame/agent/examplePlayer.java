@@ -31,7 +31,7 @@ class Player {
         List<String> actionStrings = actions.stream()
                                             .map(a -> a.action1 + "|" + a.action2)
                                             .collect(Collectors.toList());
-        System.err.println(String.format("[Player] rollout actions: %s", String.join("\n", actionStrings)));
+        // System.err.println(String.format("[Player] rollout actions: %s", String.join("\n", actionStrings)));
         if (actions.size() > 0) {
             game.takeAction(actions.get(0));
             System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));

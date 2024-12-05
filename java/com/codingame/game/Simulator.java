@@ -1980,7 +1980,6 @@ public class Simulator extends MultiReferee {
 
         for (String wizard1: podActions.get(0)) {
             for (String wizard2: podActions.get(1)) {
-                System.err.println(wizard1 + "," + wizard2 + "\n");
                 data.add(wizard1 + "," + wizard2);
             }
         }
