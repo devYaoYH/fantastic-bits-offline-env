@@ -96,6 +96,26 @@ public class Simulator extends MultiReferee {
         super(is, out, err);
     }
 
+    // public List<String> dumpStateForUpdate() {
+    //     List<String> curState = new ArrayList<>();
+
+    //     curState.add(String.format("%d %d %d %d", players[0].score, players[0].magic, players[1].score, players[1].magic));
+    //     for (Pod p : players[0].pods) {
+    //         curState.add(p.toPlayerString());
+    //     }
+    //     for (Pod p : players[1].pods) {
+    //         curState.add(p.toPlayerString());
+    //     }
+    //     for (Bludger b : bludgers) {
+    //         curState.add(b.toPlayerString());
+    //     }
+    //     for (Snaffle s : snaffles) {
+    //         curState.add(s.toPlayerString());
+    //     }
+
+    //     return curState;
+    // }
+
     public static int symmetricRound(double x) {
         int s = x < 0 ? -1 : 1;
         return s * (int)Math.round(s * x);
@@ -1818,6 +1838,67 @@ public class Simulator extends MultiReferee {
         return data.toArray(new String[data.size()]);
     }
 
+    /*
+     * Scoring heuristics based on which player's perspective.
+     */
+    public double nearestSnaffleHeuristic(int playerIdx) {
+        Player player = players[playerIdx];
+        double score = 0.0;
+        for (Pod p : player.pods) {
+            double minDist = Double.MAX_VALUE;
+            for (Snaffle s : snaffles) {
+                double distance = p.position.distance(s.position);
+                if (distance < minDist) minDist = distance;
+            }
+            score -= Math.log(minDist + 1);
+        }
+        return score;
+    }
+
+    public double snaffleToGoalHeuristic(int playerIdx) {
+        double score = 0.0;
+        Vector goalCenters[] = {new Vector(WIDTH, HEIGHT / 2), new Vector(0, HEIGHT / 2)};
+        for (Snaffle s : snaffles) {
+            double distance = s.position.distance(goalCenters[playerIdx]);
+            boolean isWithinGoalBounds = false;
+            if (s.position.y > (HEIGHT - GOAL_SIZE) / 2 + GOAL_RADIUS + SNAFFLE_RADIUS &&
+                s.position.y < (HEIGHT + GOAL_SIZE) / 2 - GOAL_RADIUS - SNAFFLE_RADIUS) {
+                isWithinGoalBounds = true;
+            }
+            if (distance < 2000 && isWithinGoalBounds) {
+                distance = playerIdx == 0 ? (WIDTH - s.position.x) : s.position.x;
+            }
+            score -= Math.log(distance + 1);
+        }
+        return score;
+    }
+
+    public double bludgerToWizardHeuristic(int playerIdx) {
+        double score = 0.0;
+        Player player = players[playerIdx];
+        for (Pod p : player.pods) {
+            double minDist = Double.MAX_VALUE;
+            for (Bludger b : bludgers) {
+                double distance = p.position.distance(b.position);
+                if (distance < minDist) minDist = distance;
+            }
+            // More distance to our wizards is good for us.
+            score += Math.log(minDist + 1);
+        }
+        playerIdx = (playerIdx + 1) % 2;
+        player = players[playerIdx];
+        for (Pod p : player.pods) {
+            double minDist = Double.MAX_VALUE;
+            for (Bludger b : bludgers) {
+                double distance = p.position.distance(b.position);
+                if (distance < minDist) minDist = distance;
+            }
+            // Less distance to Opponents is good for us.
+            score -= Math.log(minDist + 1);
+        }
+        return score;
+    }
+
     private List<String> getPodActions(Pod pod, Player player) {
         List<String> actions = new ArrayList<>();
 
@@ -1837,9 +1918,9 @@ public class Simulator extends MultiReferee {
     }
 
     @Override
-    protected String[] getWizardActionsForPlayer(int playerIdx) {
+    protected String[] getWizardActionsForPlayer() {
         List<String> data = new ArrayList<>();
-        Player player = this.players[playerIdx];
+        Player player = this.players[nextPlayer];
 
         List<List<String>> podActions = new ArrayList<>();
 
@@ -2009,9 +2090,34 @@ public class Simulator extends MultiReferee {
 
         boolean ended = false;
 
-        if (aliveSnaffles == 0 || (players[0].score >= SCORE_TO_WIN || players[1].score >= SCORE_TO_WIN) || players[0].dead() || players[1].dead()) {
+        if (aliveSnaffles == 0) {
             ended = true;
+            err.println("no alive snaffles");
         }
+
+        if (players[0].score >= SCORE_TO_WIN) {
+            ended = true;
+            err.println("player 0 WON");
+        }
+
+        if (players[1].score >= SCORE_TO_WIN) {
+            ended = true;
+            err.println("player 0 WON");
+        }
+
+        if (players[0].dead()) {
+            ended = true;
+            err.println("player 0 DEAD");
+        }
+
+        if (players[1].dead()) {
+            ended = true;
+            err.println("player 1 DEAD");
+        }
+
+        // if (aliveSnaffles == 0 || (players[0].score >= SCORE_TO_WIN || players[1].score >= SCORE_TO_WIN) || players[0].dead() || players[1].dead()) {
+        //     ended = true;
+        // }
 
         if (ended) {
             throw new GameOverException("endReached");
@@ -2284,12 +2390,6 @@ abstract class SoloReferee extends AbstractReferee {
     }
 
     @Override
-    protected final String[] getWizardActionsForPlayer(int playerIdx) {
-        if (playerIdx != 0) throw new RuntimeException("SoloReferee could only handle one-player games");
-        return getWizardActionsForPlayer();
-    }
-
-    @Override
     protected final String[] getInputForPlayer(int round, int playerIdx) {
         if (playerIdx != 0) throw new RuntimeException("SoloReferee could only handle one-player games");
         return getInputForPlayer(round);
@@ -2394,6 +2494,14 @@ abstract class AbstractReferee {
 
         public String[] getNextInput() {
             return nextInput;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("%d Score: %d Lost: %b\nInfo: %s\nReason: %s\nNext Input:\n%s\n",
+                                    id, score, lost, info, reasonCode, String.join("\n", nextInput)));
+            return sb.toString();
         }
     }
 
@@ -2514,9 +2622,14 @@ abstract class AbstractReferee {
         }
     }
 
+    public PlayerStatus getPlayerStatus() {
+        return lastPlayer;
+    }
+
     private Set<Tooltip> tooltips;
     private int playerCount, alivePlayerCount;
-    private int currentPlayer, nextPlayer;
+    private int currentPlayer;
+    protected int nextPlayer;
     private PlayerStatus lastPlayer, playerStatus;
     private int frame, round;
     private PlayerStatus[] players;
@@ -2526,7 +2639,7 @@ abstract class AbstractReferee {
 
     private InputStream is;
     private PrintWriter out;
-    private PrintStream err;
+    protected PrintStream err;
 
     public AbstractReferee(InputStream is, PrintWriter out, PrintStream err) throws IOException {
         tooltips = new HashSet<>();
@@ -2606,6 +2719,7 @@ abstract class AbstractReferee {
             case GET_GAME_INFO:
                 lastPlayer = playerStatus;
                 playerStatus = nextPlayer();
+                if (nextPlayer >= 2) throw new RuntimeException("IMPOSSIBRU! nextPlayer incremented over totalPlayer");
                 if (this.round >= getMaxRoundCount(this.playerCount)) {
                     throw new GameOverException("maxRoundsCountReached");
                 }
@@ -2628,8 +2742,6 @@ abstract class AbstractReferee {
                 dumpNextPlayerInfos();
                 break;
             case GET_CURRENT_PLAYER_WIZARD_ACTIONS:
-                lastPlayer = playerStatus;
-                playerStatus = nextPlayer();
                 dumpWizardActions();
                 break;
             case UPDATE_INTERNAL_STATE:
@@ -2657,7 +2769,7 @@ abstract class AbstractReferee {
                 for (i = 5; i < lineCount; i++) {
                     String[] entity_info = s.nextLine().split(" ");
                     if (entity_info[1].equals("SNAFFLE")) {
-                        bludgersInfo.add(entity_info);
+                        snafflesInfo.add(entity_info);
                     }
                     else {
                         bludgersInfo.add(entity_info);
@@ -2725,6 +2837,10 @@ abstract class AbstractReferee {
             reasonCode = e.getReasonCode();
             reason = e.getReason();
 
+            out.println("[[GAME_OVER] 2]");
+            out.println(reasonCode);
+            out.println(reason);
+
             dumpView();
             dumpInfos();
             prepare(round);
@@ -2736,6 +2852,7 @@ abstract class AbstractReferee {
             s.close();
             return;
         }
+        out.flush();
     }
 
     public void closeGame() throws IOException {
@@ -2858,7 +2975,7 @@ abstract class AbstractReferee {
 
     private void dumpWizardActions() {
         OutputData data = new OutputData(OutputCommand.WIZARD_LOCATIONS);
-        data.addAll(getWizardActionsForPlayer(nextPlayer));
+        data.addAll(getWizardActionsForPlayer());
         out.println(data);
     }
 
@@ -2966,7 +3083,7 @@ abstract class AbstractReferee {
 
     protected abstract String[] getInitInputForPlayer(int playerIdx);
 
-    protected abstract String[] getWizardActionsForPlayer(int playerIdx);
+    protected abstract String[] getWizardActionsForPlayer();
 
     protected abstract String[] getInputForPlayer(int round, int playerIdx);
 

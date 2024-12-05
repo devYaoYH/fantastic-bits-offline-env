@@ -1,15 +1,15 @@
 package com.codingame.game;
 
 public class WizardAction {
-    public Action action1, action2;
-    public WizardAction(Action action1, Action action2) {
+    public String action1, action2;
+    public WizardAction(String action1, String action2) {
         this.action1 = action1;
         this.action2 = action2;
     }
 
     @Override
     public int hashCode() {
-        String combinedAction = action1.toString() + action2.toString();
+        String combinedAction = action1 + action2;
         return combinedAction.hashCode();
     }
 
