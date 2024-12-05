@@ -96,6 +96,26 @@ public class Simulator extends MultiReferee {
         super(is, out, err);
     }
 
+    // public List<String> dumpStateForUpdate() {
+    //     List<String> curState = new ArrayList<>();
+
+    //     curState.add(String.format("%d %d %d %d", players[0].score, players[0].magic, players[1].score, players[1].magic));
+    //     for (Pod p : players[0].pods) {
+    //         curState.add(p.toPlayerString());
+    //     }
+    //     for (Pod p : players[1].pods) {
+    //         curState.add(p.toPlayerString());
+    //     }
+    //     for (Bludger b : bludgers) {
+    //         curState.add(b.toPlayerString());
+    //     }
+    //     for (Snaffle s : snaffles) {
+    //         curState.add(s.toPlayerString());
+    //     }
+
+    //     return curState;
+    // }
+
     public static int symmetricRound(double x) {
         int s = x < 0 ? -1 : 1;
         return s * (int)Math.round(s * x);
@@ -250,6 +270,11 @@ public class Simulator extends MultiReferee {
         protected Vector position;
         protected int radius;
         protected String type;
+
+        // Overrides the internal id with a new one.
+        public void setId(int id) {
+            this.id = id;
+        }
 
         public Entity(String type, Vector position, int radius) {
             this.id = UNIQUE_ENTITY_ID++;
@@ -456,6 +481,11 @@ public class Simulator extends MultiReferee {
             super("BLUDGER", new Vector(x, y), BLUDGER_RADIUS);
         }
 
+        public Bludger(int x, int y, int vx, int vy) {
+            super("BLUDGER", new Vector(x, y), BLUDGER_RADIUS);
+            this.speed = new Vector(vx, vy);
+        }
+
         public double getMass() {
             return BLUDGER_MASS;
         }
@@ -464,6 +494,10 @@ public class Simulator extends MultiReferee {
             if (c2 instanceof Pod) {
                 lastVictim = (Pod)c2;
             }
+        }
+
+        public void updatePod(Pod pod) {
+            this.lastVictim = pod;
         }
 
         public void prepareRound() {
@@ -686,6 +720,10 @@ public class Simulator extends MultiReferee {
             this.timeBeforeCanCaptureAgain = 0;
         }
 
+        public void setVelocity(int vx, int vy) {
+            this.speed = new Vector(vx, vy);
+        }
+
         public String toPlayerString(boolean myPlayer) {
             long positionX = (myPlayer || cloakCountDown.getValue() == 0) ? Math.round(position.x) : 0;
             long positionY = (myPlayer || cloakCountDown.getValue() == 0) ? Math.round(position.y) : 0;
@@ -779,6 +817,25 @@ public class Simulator extends MultiReferee {
             this.snaffle = null;
         }
 
+        public void scanForSnaffleToCapture() {
+            // Find closest snaffle
+            Snaffle closestSnaffle = null;
+            double distMin = 0;
+            for (Snaffle snaffle: snaffles) {
+                if (snaffle.canBeCapturedByPod(this)) {
+                    double dist2 = this.position.distance2(snaffle.position);
+                    if (dist2 <= (this.radius - 1) * (this.radius - 1) && (closestSnaffle == null || dist2 < distMin)) {
+                       closestSnaffle = snaffle;
+                       distMin = dist2;
+                    }
+                }
+            }
+            if (closestSnaffle != null) {
+                this.snaffle = closestSnaffle;
+                this.snaffle.captured = true;
+            }
+        }
+
         public double contactPosition(Snaffle o) {
             return contactPosition(this.speed.sub(o.speed), new Vector(o.position, this.position), radius - 1);
         }
@@ -865,6 +922,18 @@ public class Simulator extends MultiReferee {
 
         public void addPod(Pod pod) {
             this.pods.add(pod);
+        }
+
+        public void resetPods() {
+            this.pods = new ArrayList<>();
+        }
+
+        public void setScore(int score) {
+            this.score = score;
+        }
+
+        public void setMagic(int magic) {
+            this.magic = magic;
         }
 
         public boolean dead() {
@@ -1311,6 +1380,92 @@ public class Simulator extends MultiReferee {
     }
 
     @Override
+    protected void updatePlayer(int playerIdx, int score, int magic) {
+        Player player = this.players[playerIdx];
+        player.setScore(score);
+        player.setMagic(magic);
+    }
+
+    private Pod createPod(String[] podInfo, Player player) {
+        int id = Integer.parseInt(podInfo[0]);
+        int x = Integer.parseInt(podInfo[2]);
+        int y = Integer.parseInt(podInfo[3]);
+        int vx = Integer.parseInt(podInfo[4]);
+        int vy = Integer.parseInt(podInfo[5]);
+        Point startPoint = new Point(WIDTH / 2, HEIGHT / 2);
+        Vector pos = new Vector(x, y);
+        Pod pod = new Pod(pos, player, startPoint);
+        pod.setVelocity(vx, vy);
+        if (Integer.parseInt(podInfo[6]) == 1) {
+            pod.scanForSnaffleToCapture();
+        }
+        pod.setId(id);
+        return pod;
+    }
+
+    @Override
+    // Should have 4 elements, 2 player * 2 pods
+    protected void updatePods(List<String[]> podsInfo) {
+        List<Pod> pods = new ArrayList<>();
+        for (int playerIdx = 0; playerIdx < 2; ++playerIdx) {
+            Player player = this.players[playerIdx];
+            player.resetPods();
+            for (int i = 0; i < 2; ++i) {
+                Pod pod = createPod(podsInfo.get(playerIdx*2+i), player);
+                player.addPod(pod);
+                pods.add(pod);
+            }
+        }
+        this.pods = pods.toArray(new Pod[pods.size()]);
+    }
+
+    private Bludger createBludger(String[] bludgerInfo) {
+        int id = Integer.parseInt(bludgerInfo[0]);
+        int x = Integer.parseInt(bludgerInfo[2]);
+        int y = Integer.parseInt(bludgerInfo[3]);
+        int vx = Integer.parseInt(bludgerInfo[4]);
+        int vy = Integer.parseInt(bludgerInfo[5]);
+        Bludger bludger = new Bludger(x, y, vx, vy);
+        bludger.setId(id);
+        return bludger;
+    }
+
+    @Override
+    protected void updateBludgers(List<String[]> bludgersInfo) {
+        List<Bludger> bludgers = new ArrayList<>();
+        for (String[] bludgerInfo : bludgersInfo) {
+            Bludger bludger = createBludger(bludgerInfo);
+            int lastVictimId = Integer.parseInt(bludgerInfo[6]);
+            if (lastVictimId != -1) {
+                bludger.updatePod(findPodById(lastVictimId));
+            }
+            bludgers.add(bludger);
+        }
+        this.bludgers = bludgers;
+    }
+
+    private Snaffle createSnaffle(String[] snaffleInfo) {
+        int id = Integer.parseInt(snaffleInfo[0]);
+        int x = Integer.parseInt(snaffleInfo[2]);
+        int y = Integer.parseInt(snaffleInfo[3]);
+        int vx = Integer.parseInt(snaffleInfo[4]);
+        int vy = Integer.parseInt(snaffleInfo[5]);
+        Snaffle snaffle = new Snaffle(x, y, vx, vy);
+        snaffle.setId(id);
+        return snaffle;
+    }
+
+    @Override
+    protected void updateSnaffles(List<String[]> snafflesInfo) {
+        List<Snaffle> snaffles = new ArrayList<>();
+        for (String[] snaffleInfo: snafflesInfo) {
+            Snaffle snaffle = createSnaffle(snaffleInfo);
+            snaffles.add(snaffle);
+        }
+        this.snaffles = snaffles;
+    }
+
+    @Override
     protected int getMaxRoundCount(int playerCount) {
         return 200;
     }
@@ -1683,6 +1838,156 @@ public class Simulator extends MultiReferee {
         return data.toArray(new String[data.size()]);
     }
 
+    /*
+     * Scoring heuristics based on which player's perspective.
+     */
+    public double nearestSnaffleHeuristic(int playerIdx) {
+        Player player = players[playerIdx];
+        double score = 0.0;
+        for (Pod p : player.pods) {
+            double minDist = Double.MAX_VALUE;
+            for (Snaffle s : snaffles) {
+                double distance = p.position.distance(s.position);
+                if (distance < minDist) minDist = distance;
+            }
+            score -= Math.log(minDist + 1);
+        }
+        return score;
+    }
+
+    public double snaffleToGoalHeuristic(int playerIdx) {
+        double score = 0.0;
+        Vector goalCenters[] = {new Vector(WIDTH, HEIGHT / 2), new Vector(0, HEIGHT / 2)};
+        for (Snaffle s : snaffles) {
+            double distance = s.position.distance(goalCenters[playerIdx]);
+            boolean isWithinGoalBounds = false;
+            if (s.position.y > (HEIGHT - GOAL_SIZE) / 2 + GOAL_RADIUS + SNAFFLE_RADIUS &&
+                s.position.y < (HEIGHT + GOAL_SIZE) / 2 - GOAL_RADIUS - SNAFFLE_RADIUS) {
+                isWithinGoalBounds = true;
+            }
+            if (distance < 2000 && isWithinGoalBounds) {
+                distance = playerIdx == 0 ? (WIDTH - s.position.x) : s.position.x;
+            }
+            score -= Math.log(distance + 1);
+        }
+        return score;
+    }
+
+    public double bludgerToWizardHeuristic(int playerIdx) {
+        double score = 0.0;
+        Player player = players[playerIdx];
+        for (Pod p : player.pods) {
+            double minDist = Double.MAX_VALUE;
+            for (Bludger b : bludgers) {
+                double distance = p.position.distance(b.position);
+                if (distance < minDist) minDist = distance;
+            }
+            // More distance to our wizards is good for us.
+            score += Math.log(minDist + 1);
+        }
+        playerIdx = (playerIdx + 1) % 2;
+        player = players[playerIdx];
+        for (Pod p : player.pods) {
+            double minDist = Double.MAX_VALUE;
+            for (Bludger b : bludgers) {
+                double distance = p.position.distance(b.position);
+                if (distance < minDist) minDist = distance;
+            }
+            // Less distance to Opponents is good for us.
+            score -= Math.log(minDist + 1);
+        }
+        return score;
+    }
+
+    public static List<Vector> generateRadialUnitVectors(int num) {
+        List<Vector> vectors = new ArrayList<>();
+        double angleIncrement = 2 * Math.PI / num;
+        for (int i = 0; i < num; i++) {
+            double angle = i * angleIncrement;
+            double x = Math.cos(angle);
+            double y = Math.sin(angle);
+            vectors.add(new Vector(x, y));
+        }
+        return vectors;
+    }
+
+    private List<String> getPodActions(Pod pod, Player player) {
+        List<String> actions = new ArrayList<>();
+        System.err.println(String.format("Generating moves for pod %s", pod));
+
+        List<Vector> radialVectors = generateRadialUnitVectors(15);
+
+        // Always add a default PAUSE options.
+        actions.add(String.format("MOVE %.0f %.0f %d", pod.position.x, pod.position.y, 150));
+
+        // Generate throws
+        if (pod.snaffle != null) {
+            for (Vector v : radialVectors) {
+                Vector dest = pod.position.add(v.mult(500));
+                actions.add(String.format("THROW %.0f %.0f %d", dest.x, dest.y, 500));
+            }
+        }
+        // Generate movements: if we have a snaffle, throw it!
+        else {
+            for (Vector v : radialVectors) {
+                Vector dest = pod.position.add(v.mult(150));
+                actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 150));
+                actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 75));
+            }
+        }
+
+        for (Snaffle s : snaffles) {
+            // Generate Flipendo
+            if (player.magic >= FLIPENDO_MAGIC) {
+                actions.add(String.format("FLIPENDO %d", s.id));
+            }
+            // Generate Accio
+            if (player.magic >= ACCIO_MAGIC) {
+                actions.add(String.format("ACCIO %d", s.id));
+            }
+        }
+        // Generate Petrificus
+        for (Bludger b : bludgers) {
+            if (player.magic >= PETRIFICUS_MAGIC) {
+                actions.add(String.format("PETRIFICUS %d", b.id));
+            }
+            // Generate Oblivate
+            if (player.magic >= OBLIVIATE_MAGIC) {
+                actions.add(String.format("OBLIVATE %d", b.id));
+            }
+        }
+        for (Pod p : pods) {
+            if (p.player != player) {
+                if (player.magic >= PETRIFICUS_MAGIC) {
+                    actions.add(String.format("PETRIFICUS %d", p.id));
+                }
+            }
+        }
+
+        return actions;
+    }
+
+    @Override
+    protected String[] getWizardActionsForPlayer() {
+        List<String> data = new ArrayList<>();
+        Player player = this.players[nextPlayer];
+
+        List<List<String>> podActions = new ArrayList<>();
+
+        for (Pod p : player.pods) {
+            podActions.add(getPodActions(p, player));
+        }
+
+        for (String wizard1: podActions.get(0)) {
+            for (String wizard2: podActions.get(1)) {
+                System.err.println(wizard1 + "," + wizard2 + "\n");
+                data.add(wizard1 + "," + wizard2);
+            }
+        }
+
+        return data.toArray(new String[data.size()]);
+    }
+
     @Override
     protected String[] getInputForPlayer(int round, int playerIdx) {
         List<String> data = new ArrayList<>();
@@ -1835,9 +2140,34 @@ public class Simulator extends MultiReferee {
 
         boolean ended = false;
 
-        if (aliveSnaffles == 0 || (players[0].score >= SCORE_TO_WIN || players[1].score >= SCORE_TO_WIN) || players[0].dead() || players[1].dead()) {
+        if (aliveSnaffles == 0) {
             ended = true;
+            err.println("no alive snaffles");
         }
+
+        if (players[0].score >= SCORE_TO_WIN) {
+            ended = true;
+            err.println("player 0 WON");
+        }
+
+        if (players[1].score >= SCORE_TO_WIN) {
+            ended = true;
+            err.println("player 0 WON");
+        }
+
+        if (players[0].dead()) {
+            ended = true;
+            err.println("player 0 DEAD");
+        }
+
+        if (players[1].dead()) {
+            ended = true;
+            err.println("player 1 DEAD");
+        }
+
+        // if (aliveSnaffles == 0 || (players[0].score >= SCORE_TO_WIN || players[1].score >= SCORE_TO_WIN) || players[0].dead() || players[1].dead()) {
+        //     ended = true;
+        // }
 
         if (ended) {
             throw new GameOverException("endReached");
@@ -2091,6 +2421,8 @@ abstract class SoloReferee extends AbstractReferee {
 
     protected abstract String[] getInitInputForPlayer();
 
+    protected abstract String[] getWizardActionsForPlayer();
+
     protected abstract String[] getInputForPlayer(int round);
 
     protected abstract String[] getTextForConsole(int round);
@@ -2213,6 +2545,14 @@ abstract class AbstractReferee {
         public String[] getNextInput() {
             return nextInput;
         }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("%d Score: %d Lost: %b\nInfo: %s\nReason: %s\nNext Input:\n%s\n",
+                                    id, score, lost, info, reasonCode, String.join("\n", nextInput)));
+            return sb.toString();
+        }
     }
 
     private Properties messages = new Properties();
@@ -2283,11 +2623,11 @@ abstract class AbstractReferee {
     }
 
     public static enum InputCommand {
-        INIT, GET_GAME_INFO, SET_PLAYER_OUTPUT, SET_PLAYER_TIMEOUT
+        INIT, GET_GAME_INFO, SET_PLAYER_OUTPUT, SET_PLAYER_TIMEOUT, GET_CURRENT_PLAYER_WIZARD_ACTIONS, UPDATE_INTERNAL_STATE
     }
 
     public static enum OutputCommand {
-        VIEW, INFOS, NEXT_PLAYER_INPUT, NEXT_PLAYER_INFO, SCORES, UINPUT, TOOLTIP, SUMMARY;
+        VIEW, INFOS, NEXT_PLAYER_INPUT, NEXT_PLAYER_INFO, SCORES, UINPUT, TOOLTIP, SUMMARY, WIZARD_LOCATIONS;
         public String format(int lineCount) {
             return String.format("[[%s] %d]", this.name(), lineCount);
         }
@@ -2332,9 +2672,14 @@ abstract class AbstractReferee {
         }
     }
 
+    public PlayerStatus getPlayerStatus() {
+        return lastPlayer;
+    }
+
     private Set<Tooltip> tooltips;
     private int playerCount, alivePlayerCount;
-    private int currentPlayer, nextPlayer;
+    private int currentPlayer;
+    protected int nextPlayer;
     private PlayerStatus lastPlayer, playerStatus;
     private int frame, round;
     private PlayerStatus[] players;
@@ -2344,7 +2689,7 @@ abstract class AbstractReferee {
 
     private InputStream is;
     private PrintWriter out;
-    private PrintStream err;
+    protected PrintStream err;
 
     public AbstractReferee(InputStream is, PrintWriter out, PrintStream err) throws IOException {
         tooltips = new HashSet<>();
@@ -2424,6 +2769,7 @@ abstract class AbstractReferee {
             case GET_GAME_INFO:
                 lastPlayer = playerStatus;
                 playerStatus = nextPlayer();
+                if (nextPlayer >= 2) throw new RuntimeException("IMPOSSIBRU! nextPlayer incremented over totalPlayer");
                 if (this.round >= getMaxRoundCount(this.playerCount)) {
                     throw new GameOverException("maxRoundsCountReached");
                 }
@@ -2444,6 +2790,46 @@ abstract class AbstractReferee {
                 }
                 dumpNextPlayerInput();
                 dumpNextPlayerInfos();
+                break;
+            case GET_CURRENT_PLAYER_WIZARD_ACTIONS:
+                dumpWizardActions();
+                break;
+            case UPDATE_INTERNAL_STATE:
+                // First line is the score and magic.
+                String[] info = s.nextLine().split(" ");
+                int score[] = {Integer.parseInt(info[0]), Integer.parseInt(info[2])};
+                int magic[] = {Integer.parseInt(info[1]), Integer.parseInt(info[3])};
+                for (int p = 0; p < 2; ++p) {
+                    updatePlayer(p, score[p], magic[p]);
+                }
+                // Next 2 lines are player 0 wizard info.
+                List<String[]> wizardsInfo = new ArrayList<>();
+                for (i = 1; i < 3; i++) {
+                    String[] wizard_info = s.nextLine().split(" ");
+                    wizardsInfo.add(wizard_info);
+                }
+                // Next 2 lines are player 1 wizard info.
+                for (i = 3; i < 5; i++) {
+                    String[] wizard_info = s.nextLine().split(" ");
+                    wizardsInfo.add(wizard_info);
+                }
+                // Subsequent lines are the entity information.
+                List<String[]> bludgersInfo = new ArrayList<>();
+                List<String[]> snafflesInfo = new ArrayList<>();
+                for (i = 5; i < lineCount; i++) {
+                    String[] entity_info = s.nextLine().split(" ");
+                    if (entity_info[1].equals("SNAFFLE")) {
+                        snafflesInfo.add(entity_info);
+                    }
+                    else {
+                        bludgersInfo.add(entity_info);
+                    }
+                }
+                // We need to first update snaffles and bludgers
+                updateBludgers(bludgersInfo);
+                updateSnaffles(snafflesInfo);
+                // Then create and update new wizards
+                updatePods(wizardsInfo);
                 break;
             case SET_PLAYER_OUTPUT:
                 ++frame;
@@ -2501,6 +2887,10 @@ abstract class AbstractReferee {
             reasonCode = e.getReasonCode();
             reason = e.getReason();
 
+            out.println("[[GAME_OVER] 2]");
+            out.println(reasonCode);
+            out.println(reason);
+
             dumpView();
             dumpInfos();
             prepare(round);
@@ -2512,6 +2902,7 @@ abstract class AbstractReferee {
             s.close();
             return;
         }
+        out.flush();
     }
 
     public void closeGame() throws IOException {
@@ -2632,6 +3023,12 @@ abstract class AbstractReferee {
         out.println(data);
     }
 
+    private void dumpWizardActions() {
+        OutputData data = new OutputData(OutputCommand.WIZARD_LOCATIONS);
+        data.addAll(getWizardActionsForPlayer());
+        out.println(data);
+    }
+
     private void dumpNextPlayerInput() {
         OutputData data = new OutputData(OutputCommand.NEXT_PLAYER_INPUT);
         if (this.round == 0) {
@@ -2736,6 +3133,8 @@ abstract class AbstractReferee {
 
     protected abstract String[] getInitInputForPlayer(int playerIdx);
 
+    protected abstract String[] getWizardActionsForPlayer();
+
     protected abstract String[] getInputForPlayer(int round, int playerIdx);
 
     protected abstract String getHeadlineAtGameStartForConsole();
@@ -2765,4 +3164,15 @@ abstract class AbstractReferee {
     protected abstract String[] getPlayerActions(int playerIdx, int round);
 
     protected abstract void setPlayerTimeout(int frame, int round, int playerIdx);
+
+    /**
+     * Simulation functions
+     */
+    protected abstract void updatePlayer(int playerIdx, int score, int magic);
+
+    protected abstract void updatePods(List<String[]> podsInfo);
+
+    protected abstract void updateBludgers(List<String[]> bludgersInfo);
+
+    protected abstract void updateSnaffles(List<String[]> snafflesInfo);
 }

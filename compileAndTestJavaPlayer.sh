@@ -3,7 +3,7 @@ rm mcts.jar
 # Prepare build directory
 mkdir -p build
 # Generate .class files
-javac -d ./build java/com/codingame/agent/*.java java/com/codingame/game/Simulator.java java/com/codingame/game/GameNode.java java/com/codingame/algorithms/GameTree.java
+javac -d ./build java/com/codingame/agent/*.java java/com/codingame/game/Simulator.java java/com/codingame/game/GameNode.java java/com/codingame/algorithms/GameTree.java java/com/codingame/game/WizardAction.java java/com/codingame/game/Action.java || exit 1
 # Generate .jar
 cd build
 echo "Main-Class: com.codingame.agent.AlphaBetaPlayer" > MANIFEST.MF
