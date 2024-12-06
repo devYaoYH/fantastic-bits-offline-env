@@ -51,7 +51,7 @@ class AlphaBetaPlayer {
 
                 // Edit this line to indicate the action for each wizard (0 ≤ thrust ≤ 150, 0 ≤ power ≤ 500)
                 // i.e.: "MOVE x y thrust" or "THROW x y power"
-                System.out.println("MOVE 6000 3750 100");
+                System.out.println("MOVE 000 3750 100");
             }
         }
     }
