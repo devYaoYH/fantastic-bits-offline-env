@@ -23,5 +23,10 @@ public class WizardAction {
         }
         return this.hashCode() == obj.hashCode();
     }
+
+    @Override
+    public String toString() {
+        return String.format("%s|%s", action1, action2);
+    }
 }
 

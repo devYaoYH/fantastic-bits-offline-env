@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.io.*;
 import java.math.*;
+import java.time.Duration;
 
 import com.codingame.game.Action;
 import com.codingame.game.GameNode;
@@ -16,10 +17,20 @@ import com.codingame.game.WizardAction;
  **/
 class Player {
 
+    // Instrumentation function
+    public static void markTime(long startTime) {
+        long endTime = System.nanoTime();
+
+        long durationInNano = endTime - startTime;
+        long durationInMillis = Duration.ofNanos(durationInNano).toMillis();
+
+        System.err.println("Time taken: " + durationInMillis + " milliseconds");
+    }
+
     private static List<Double> geneticParams;
 
-    private static double rollout(GameNode game, int depth) throws IOException, RuntimeException {
-        System.err.println(String.format("========== ROLLOUT DEPTH: %d ==========", depth));
+    private static double rollout(GameNode game, int depth) throws IOException {
+        System.err.println(String.format("========== ROLLOUT DEPTH: %d | Player: %b ==========", depth, game.isOptimizingPlayerTurn()));
         if (depth < 0) {
             return -1;
         }
@@ -33,10 +44,23 @@ class Player {
                                             .collect(Collectors.toList());
         // System.err.println(String.format("[Player] rollout actions: %s", String.join("\n", actionStrings)));
         if (actions.size() > 0) {
-            game.takeAction(actions.get(0));
+            try {
+                game.takeAction(actions.get(0));
+            }
+            catch (RuntimeException e) {
+                // This means the game is over
+                return game.getScore(geneticParams);
+            }
             System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
         }
-        return rollout(game.copy(), depth-1);
+        GameNode gameCopy;
+        try {
+            gameCopy = game.copy();
+        }
+        catch (RuntimeException e) {
+            return game.getScore(geneticParams);
+        }
+        return rollout(gameCopy, depth-1);
     }
 
     public static void main(String args[]) throws IOException {
@@ -124,10 +148,14 @@ class Player {
 
             System.err.println(String.format("Finished processing turn %d", turnNumber));
 
+            long startTime = System.nanoTime();
+
             GameNode init = new GameNode(myTeamId);
             init.initializeSimulator(List.of(gameState.toString().split("\n")));
             double score = rollout(init, 3);
             System.err.println(String.format("Rollout Score: %.3f", score));
+
+            markTime(startTime);
 
             for (int i = 0; i < 2; i++) {
 

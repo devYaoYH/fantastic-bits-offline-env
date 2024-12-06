@@ -4,11 +4,13 @@ import java.io.*;
 import java.lang.RuntimeException;
 import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
 public class GameNode {
+    public static boolean DEPLOY = true;
     private int teamId;
     private int currentPlayerIdx;
     private Simulator simulator;
@@ -41,6 +43,10 @@ public class GameNode {
 
     private List<Function<Simulator, Double>> heuristics;
 
+    private static void logIfNotDeploy(String msg) {
+        if (!DEPLOY) System.err.println(msg);
+    }
+
     // Initialize from perspective of the optimizing player.
     public GameNode(int teamId) throws IOException {
         this.teamId = teamId;
@@ -61,11 +67,11 @@ public class GameNode {
         this.heuristics.add(s -> bludgerToWizardHeuristic(s));
     }
 
-    public GameNode copy() throws IOException {
+    public GameNode copy() throws IOException, RuntimeException {
         GameNode newNode = new GameNode(teamId);
         newNode.initializeSimulator(this.initialState);
+        logIfNotDeploy(String.format("[GameNode] Copying Actions: %s", String.join(",", this.actionSequence.stream().map(w -> w.toString()).collect(Collectors.toList()))));
         for (WizardAction wa : this.actionSequence) {
-            newNode.step();
             newNode.takeAction(wa);
         }
         return newNode;
@@ -82,11 +88,12 @@ public class GameNode {
     }
 
     // Formats and sends a command into the simulator.
-    private void executeCommand(String command, List<String> data) throws IOException {
-        System.err.println(String.format("[GameNode] Sending command: %s", command));
+    private void executeCommand(String command, List<String> data) throws IOException, RuntimeException {
+        logIfNotDeploy(String.format("[GameNode] Sending command: %s", command));
         commandInput.write(String.format("[[%s] %d]\n", command, data.size()).getBytes());
         for (String line : data) {
             commandInput.write(String.format("%s\n", line).getBytes());
+            // logIfNotDeploy(line);
         }
         simulator.processInput();
     }
@@ -98,7 +105,7 @@ public class GameNode {
         while (s.hasNextLine()) {
             String line = s.nextLine();
             sb.append(line + "\n");
-            // System.err.println("[Simulator] read line: " + line);
+            // logIfNotDeploy("[Simulator] read line: " + line);
             numLinesRead++;
         }
         this.sw.getBuffer().setLength(0);
@@ -112,22 +119,26 @@ public class GameNode {
         int numLinesRead = 0;
         numLinesRead = readOutputBuffer(sb);
         // while ((numLinesRead = readOutputBuffer(sb)) <= 0) {
-        //    System.err.println("[Simulator] waiting to receive lines...");
+        //    logIfNotDeploy("[Simulator] waiting to receive lines...");
         //}
         return sb.toString();
     }
 
-    public void initializeSimulator() throws IOException {
+    public void initializeSimulator() throws IOException, RuntimeException {
         // Initialize simulation
         executeCommand("INIT", List.of("2"));
+        // Make the game ready to be played
+        step();
         this.currentPlayerIdx = 0;
     }
 
-    public void initializeSimulator(List<String> gameState) throws IOException {
+    public void initializeSimulator(List<String> gameState) throws IOException, RuntimeException {
         // We need to first initialize the structure
         executeCommand("INIT", List.of("2"));
         // Update simulator to another internal state
         executeCommand("UPDATE_INTERNAL_STATE", gameState);
+        // Make the game ready to be played
+        step();
         // If optimizing agent is playerIdx 1, we need to first simulate
         // opponent move.
         this.currentPlayerIdx = 0;
@@ -140,29 +151,28 @@ public class GameNode {
         return currentPlayerIdx == teamId;
     }
 
-    public void step() throws IOException {
-        this.isReadyForAction = true;
+    public void step() throws IOException, RuntimeException {
+        if (this.isReadyForAction) return;
         executeCommand("GET_GAME_INFO", Collections.emptyList());
         gameState = waitForSimulatorOutput();
+        // Increment and modulo player index
+        currentPlayerIdx = (currentPlayerIdx + 1) % 2;
+        this.isReadyForAction = true;
     }
 
     // At least 1 action will be available since we always generate
     // MOVE in 16 directions * 2 thrust levels.
-    private void generateActions() throws IOException {
+    private void generateActions() throws IOException, RuntimeException {
         if (permissibleActions.size() > 0) {
             return;
         }
 
-        System.err.println("Attempting to generate next round actions");
+        logIfNotDeploy("Attempting to generate next round actions");
         System.err.flush();
 
         // Step the game info
-        step();
         String playerStatus = simulator.getPlayerStatus().toString();
-        System.err.println(String.format("[GameNode] Player Status:\n%s", playerStatus));
-
-        // Increment and modulo player index
-        currentPlayerIdx = (currentPlayerIdx + 1) % 2;
+        logIfNotDeploy(String.format("[GameNode] Player Status:\n%s", playerStatus));
 
         // Expect 2 lines from simulator.
         executeCommand("GET_CURRENT_PLAYER_WIZARD_ACTIONS", Collections.emptyList());
@@ -185,10 +195,11 @@ public class GameNode {
                 }
             }
         }
+        s.close();
     }
 
     // Get available actions for the current player.
-    public List<WizardAction> getActions() throws IOException {
+    public List<WizardAction> getActions() throws IOException, RuntimeException {
         generateActions();
         return new ArrayList<>(permissibleActions);
     }
@@ -216,6 +227,7 @@ public class GameNode {
         // We clear the list of actions after taking one as this means we're on to the next player
         permissibleActions = new ArrayList<>();
         isReadyForAction = false;
+        step();
         return reward;
     }
 }

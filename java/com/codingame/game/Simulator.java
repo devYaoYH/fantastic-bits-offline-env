@@ -2698,7 +2698,7 @@ abstract class AbstractReferee {
     }
 
     @SuppressWarnings("resource")
-    public void processInput() throws IOException {
+    public void processInput() throws IOException, RuntimeException {
         this.messages.put("InvalidInput", "invalid input. Expected '%s' but found '%s'");
         this.messages.put("playerTimeoutMulti",
                 "Timeout: the program did not provide %d input lines in due time... $%d will no longer be active in this game.");
@@ -2894,6 +2894,7 @@ abstract class AbstractReferee {
             dumpInfos();
             prepare(round);
             updateScores();
+            throw new RuntimeException("gameOver");
         } catch (GameErrorException e) {
             // e.printStackTrace();
         } catch (Throwable t) {
