@@ -1899,6 +1899,14 @@ public class Simulator extends MultiReferee {
         return score;
     }
 
+    public double magicHeuristic(int playerIdx) {
+        return players[playerIdx].magic;
+    }
+
+    public double scoreHeuristic(int playerIdx) {
+        return players[playerIdx].score;
+    }
+
     public static List<Vector> generateRadialUnitVectors(int num) {
         List<Vector> vectors = new ArrayList<>();
         double angleIncrement = 2 * Math.PI / num;
@@ -1913,9 +1921,8 @@ public class Simulator extends MultiReferee {
 
     private List<String> getPodActions(Pod pod, Player player) {
         List<String> actions = new ArrayList<>();
-        System.err.println(String.format("Generating moves for pod %s", pod));
 
-        List<Vector> radialVectors = generateRadialUnitVectors(15);
+        List<Vector> radialVectors = generateRadialUnitVectors(8);
 
         // Always add a default PAUSE options.
         actions.add(String.format("MOVE %.0f %.0f %d", pod.position.x, pod.position.y, 150));
@@ -1932,34 +1939,33 @@ public class Simulator extends MultiReferee {
             for (Vector v : radialVectors) {
                 Vector dest = pod.position.add(v.mult(150));
                 actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 150));
-                actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 75));
+                // actions.add(String.format("MOVE %.0f %.0f %d", dest.x, dest.y, 75));
             }
-        }
-
-        for (Snaffle s : snaffles) {
-            // Generate Flipendo
-            if (player.magic >= FLIPENDO_MAGIC) {
-                actions.add(String.format("FLIPENDO %d", s.id));
+            for (Snaffle s : snaffles) {
+                // Generate Flipendo
+                if (player.magic >= FLIPENDO_MAGIC) {
+                    actions.add(String.format("FLIPENDO %d", s.id));
+                }
+                // Generate Accio
+                if (player.magic >= ACCIO_MAGIC) {
+                    actions.add(String.format("ACCIO %d", s.id));
+                }
             }
-            // Generate Accio
-            if (player.magic >= ACCIO_MAGIC) {
-                actions.add(String.format("ACCIO %d", s.id));
-            }
-        }
-        // Generate Petrificus
-        for (Bludger b : bludgers) {
-            if (player.magic >= PETRIFICUS_MAGIC) {
-                actions.add(String.format("PETRIFICUS %d", b.id));
-            }
-            // Generate Oblivate
-            if (player.magic >= OBLIVIATE_MAGIC) {
-                actions.add(String.format("OBLIVATE %d", b.id));
-            }
-        }
-        for (Pod p : pods) {
-            if (p.player != player) {
+            // Generate Petrificus
+            for (Bludger b : bludgers) {
                 if (player.magic >= PETRIFICUS_MAGIC) {
-                    actions.add(String.format("PETRIFICUS %d", p.id));
+                    actions.add(String.format("PETRIFICUS %d", b.id));
+                }
+                // Generate Obliviate
+                if (player.magic >= OBLIVIATE_MAGIC) {
+                    actions.add(String.format("OBLIVIATE %d", b.id));
+                }
+            }
+            for (Pod p : pods) {
+                if (p.player != player) {
+                    if (player.magic >= PETRIFICUS_MAGIC) {
+                        actions.add(String.format("PETRIFICUS %d", p.id));
+                    }
                 }
             }
         }
@@ -2146,12 +2152,12 @@ public class Simulator extends MultiReferee {
 
         if (players[0].score >= SCORE_TO_WIN) {
             ended = true;
-            err.println("player 0 WON");
+            err.println(String.format("player 0 WON Score: %d", players[0].score));
         }
 
         if (players[1].score >= SCORE_TO_WIN) {
             ended = true;
-            err.println("player 0 WON");
+            err.println(String.format("player 1 WON Score: %d", players[1].score));
         }
 
         if (players[0].dead()) {

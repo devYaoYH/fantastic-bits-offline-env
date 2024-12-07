@@ -41,6 +41,14 @@ public class GameNode {
         return simulator.bludgerToWizardHeuristic(teamId);
     }
 
+    private double magicHeuristic(Simulator simulator) {
+        return simulator.magicHeuristic(teamId);
+    }
+
+    private double scoreHeuristic(Simulator simulator) {
+        return simulator.scoreHeuristic(teamId);
+    }
+
     private List<Function<Simulator, Double>> heuristics;
 
     private static void logIfNotDeploy(String msg) {
@@ -65,6 +73,8 @@ public class GameNode {
         this.heuristics.add(s -> nearestSnaffleHeuristic(s));
         this.heuristics.add(s -> snaffleToGoalHeuristic(s));
         this.heuristics.add(s -> bludgerToWizardHeuristic(s));
+        this.heuristics.add(s -> magicHeuristic(s));
+        this.heuristics.add(s -> scoreHeuristic(s));
     }
 
     public GameNode copy() throws IOException, RuntimeException {
@@ -87,6 +97,16 @@ public class GameNode {
         return totScore;
     }
 
+    public WizardAction getInitialAction() {
+        if (teamId == 0 && actionSequence.size() > 0) {
+            return actionSequence.get(0);
+        }
+        else if (teamId == 1 && actionSequence.size() > 1) {
+            return actionSequence.get(1);
+        }
+        return null;
+    }
+ 
     // Formats and sends a command into the simulator.
     private void executeCommand(String command, List<String> data) throws IOException, RuntimeException {
         logIfNotDeploy(String.format("[GameNode] Sending command: %s", command));
@@ -127,9 +147,9 @@ public class GameNode {
     public void initializeSimulator() throws IOException, RuntimeException {
         // Initialize simulation
         executeCommand("INIT", List.of("2"));
+        this.currentPlayerIdx = -1;
         // Make the game ready to be played
         step();
-        this.currentPlayerIdx = 0;
     }
 
     public void initializeSimulator(List<String> gameState) throws IOException, RuntimeException {
@@ -137,18 +157,22 @@ public class GameNode {
         executeCommand("INIT", List.of("2"));
         // Update simulator to another internal state
         executeCommand("UPDATE_INTERNAL_STATE", gameState);
-        // Make the game ready to be played
-        step();
         // If optimizing agent is playerIdx 1, we need to first simulate
         // opponent move.
-        this.currentPlayerIdx = 0;
+        this.currentPlayerIdx = -1;
         this.initialState = gameState;
+        // Make the game ready to be played
+        step();
     }
 
     // Whether simulator is set to the optimizing player's turn.
     // Optimizing player means the player we're searching actions for.
     public boolean isOptimizingPlayerTurn() {
         return currentPlayerIdx == teamId;
+    }
+
+    public int getTeamId() {
+        return teamId;
     }
 
     public void step() throws IOException, RuntimeException {

@@ -6,7 +6,6 @@ import java.io.*;
 import java.math.*;
 import java.time.Duration;
 
-import com.codingame.game.Action;
 import com.codingame.game.GameNode;
 import com.codingame.game.WizardAction;
 
@@ -16,6 +15,8 @@ import com.codingame.game.WizardAction;
  * Move towards a Snaffle and use your team id to determine where you need to throw it.
  **/
 class Player {
+
+    static Random rand = new Random(0);
 
     // Instrumentation function
     public static void markTime(long startTime) {
@@ -45,7 +46,7 @@ class Player {
         // System.err.println(String.format("[Player] rollout actions: %s", String.join("\n", actionStrings)));
         if (actions.size() > 0) {
             try {
-                game.takeAction(actions.get(0));
+                game.takeAction(actions.get(rand.nextInt(actions.size())));
             }
             catch (RuntimeException e) {
                 // This means the game is over
@@ -53,14 +54,74 @@ class Player {
             }
             System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
         }
-        GameNode gameCopy;
-        try {
-            gameCopy = game.copy();
+        return rollout(game, depth-1);
+    }
+
+    static class TreeNode {
+        private GameNode game;
+        private Double score;
+        public TreeNode(GameNode game, Double score) {
+            this.game = game;
+            this.score = score;
         }
-        catch (RuntimeException e) {
-            return game.getScore(geneticParams);
+        public Double getScore() {
+            return score;
         }
-        return rollout(gameCopy, depth-1);
+        public WizardAction getActions() {
+            return game.getInitialAction();
+        }
+    }
+
+    static Comparator<TreeNode> gameTreeComparator = (t1, t2) -> {
+        double t1Score = t1.getScore();
+        double t2Score = t2.getScore();
+        if (t1Score > t2Score) return 1;
+        else if (t1Score < t2Score) return -1;
+        else return 0;
+    };
+
+    private static TreeNode forwardSearch(GameNode game, int depth) throws IOException {
+        // System.err.println(String.format("========== FORWARD SEARCH DEPTH: %d | Player: %b | Team: %d ==========", depth, game.isOptimizingPlayerTurn(), game.getTeamId()));
+        if (depth == 0) {
+            // Return the current node
+            Double score = game.getScore(geneticParams);
+            // System.err.println(String.format("[ForwardSearch] leaf node score: %.3f", score));
+            return new TreeNode(game, score);
+        }
+        List<WizardAction> actions = game.getActions();
+        // If we are the enemy, select a random action
+        if (!game.isOptimizingPlayerTurn()) {
+            actions = List.of(actions.get(rand.nextInt(actions.size())));
+        }
+        // System.err.println(String.format("  Number of actions generated: %d", actions.size()));
+        // Branch out into further actions
+        List<TreeNode> children = new ArrayList<>();
+        for (WizardAction wa : actions) {
+            GameNode newNode;
+            try {
+                newNode = game.copy();
+            }
+            catch (RuntimeException e) {
+                return new TreeNode(game, game.getScore(geneticParams));
+            }
+            try {
+                newNode.takeAction(wa);
+            }
+            catch (RuntimeException e) {
+                // This means the game is over
+                return new TreeNode(newNode, newNode.getScore(geneticParams));
+            }
+            // Only decrease depth if we get through a complete turn
+            if ((newNode.isOptimizingPlayerTurn() && newNode.getTeamId() == 0) ||
+                (!newNode.isOptimizingPlayerTurn() && newNode.getTeamId() == 1)) {
+                // System.err.println("  New round reached.");
+                children.add(forwardSearch(newNode, depth-1));
+            }
+            else {
+                children.add(forwardSearch(newNode, depth));
+            }
+        }
+        return children.stream().max(gameTreeComparator).get();
     }
 
     public static void main(String args[]) throws IOException {
@@ -69,7 +130,7 @@ class Player {
         int myTeamId = in.nextInt(); // if 0 you need to score on the right of the map, if 1 you need to score on the left
         int turnNumber = 0;
 
-        geneticParams = List.of(1.0, 10.0, 0.5);
+        geneticParams = List.of(1.0, 10.0, 0.5, 1.0, 1000.0);
 
         for (String arg : args) {
             if (arg.startsWith("-params=")) {
@@ -152,21 +213,14 @@ class Player {
 
             GameNode init = new GameNode(myTeamId);
             init.initializeSimulator(List.of(gameState.toString().split("\n")));
-            double score = rollout(init, 3);
-            System.err.println(String.format("Rollout Score: %.3f", score));
+            // double score = rollout(init, 3);
+            // System.err.println(String.format("Rollout Score: %.3f", score));
+            WizardAction optimalAction = forwardSearch(init, 1).getActions();
 
             markTime(startTime);
 
-            for (int i = 0; i < 2; i++) {
-
-                // Write an action using System.out.println()
-                // To debug: System.err.println("Debug messages...");
-                System.err.println(String.format("moving wizard %d", i));
-
-                // Edit this line to indicate the action for each wizard (0 ≤ thrust ≤ 150, 0 ≤ power ≤ 500)
-                // i.e.: "MOVE x y thrust" or "THROW x y power"
-                System.out.println("MOVE 8000 3750 100");
-            }
+            System.out.println(optimalAction.action1);
+            System.out.println(optimalAction.action2);
         }
     }
 }

@@ -3,11 +3,11 @@ rm mcts.jar
 # Prepare build directory
 mkdir -p build
 # Generate .class files
-javac -d ./build java/com/codingame/agent/*.java java/com/codingame/game/Simulator.java java/com/codingame/game/GameNode.java java/com/codingame/algorithms/GameTree.java java/com/codingame/game/WizardAction.java java/com/codingame/game/Action.java || exit 1
+javac -d ./build java/com/codingame/agent/*.java java/com/codingame/game/Simulator.java java/com/codingame/game/GameNode.java java/com/codingame/game/WizardAction.java || exit 1
 # Generate .jar
 cd build
-echo "Main-Class: com.codingame.agent.AlphaBetaPlayer" > MANIFEST.MF
-jar cfm mcts.jar MANIFEST.MF com/codingame/game/*.class com/codingame/agent/*.class com/codingame/algorithms/*.class
+echo "Main-Class: com.codingame.agent.Player" > MANIFEST.MF
+jar cfm mcts.jar MANIFEST.MF com/codingame/game/*.class com/codingame/agent/*.class
 # Copy the generated .jar file up one directory level
 cp mcts.jar ../
 cd ../
