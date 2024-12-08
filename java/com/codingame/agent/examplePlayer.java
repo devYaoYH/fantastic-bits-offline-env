@@ -17,6 +17,9 @@ import com.codingame.game.WizardAction;
 class Player {
 
     static Random rand = new Random(0);
+    static Double RATIONALITY_COEFF = 1.0;
+    static int ROLLOUT_DEPTH = 1;
+    static int ROLLOUT_WIDTH = 10;
 
     // Instrumentation function
     public static void markTime(long startTime) {
@@ -31,7 +34,7 @@ class Player {
     private static List<Double> geneticParams;
 
     private static double rollout(GameNode game, int depth) throws IOException {
-        System.err.println(String.format("========== ROLLOUT DEPTH: %d | Player: %b ==========", depth, game.isOptimizingPlayerTurn()));
+        // System.err.println(String.format("========== ROLLOUT DEPTH: %d | Player: %b ==========", depth, game.isOptimizingPlayerTurn()));
         if (depth < 0) {
             return -1;
         }
@@ -52,7 +55,7 @@ class Player {
                 // This means the game is over
                 return game.getScore(geneticParams);
             }
-            System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
+            // System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
         }
         return rollout(game, depth-1);
     }
@@ -84,13 +87,34 @@ class Player {
         // System.err.println(String.format("========== FORWARD SEARCH DEPTH: %d | Player: %b | Team: %d ==========", depth, game.isOptimizingPlayerTurn(), game.getTeamId()));
         if (depth == 0) {
             // Return the current node
-            Double score = game.getScore(geneticParams);
-            // System.err.println(String.format("[ForwardSearch] leaf node score: %.3f", score));
-            return new TreeNode(game, score);
+            if (ROLLOUT_DEPTH == 0) {
+                return new TreeNode(game, game.getScore(geneticParams));
+            }
+            else {
+                Double totScore = 0.0;
+                for (int i = 0; i < ROLLOUT_WIDTH; ++i) {
+                    GameNode newNode = game;
+                    try {
+                        newNode = game.copy();
+                    }
+                    catch (RuntimeException e) {
+                        totScore += game.getScore(geneticParams);
+                        continue;
+                    }
+                    Double score = rollout(newNode, ROLLOUT_DEPTH);
+                    totScore += score;
+                    // System.err.println(String.format("[ForwardSearch] leaf node score: %.3f", score));
+                }
+                return new TreeNode(game, totScore / ROLLOUT_WIDTH);
+            }
         }
         List<WizardAction> actions = game.getActions();
         // If we are the enemy, select a random action
         if (!game.isOptimizingPlayerTurn()) {
+            actions = List.of(actions.get(rand.nextInt(actions.size())));
+        }
+        // We're rational up to the coeff degree
+        else if (rand.nextDouble() > RATIONALITY_COEFF) {
             actions = List.of(actions.get(rand.nextInt(actions.size())));
         }
         // System.err.println(String.format("  Number of actions generated: %d", actions.size()));
@@ -126,11 +150,14 @@ class Player {
 
     public static void main(String args[]) throws IOException {
 
-        Scanner in = new Scanner(System.in);
-        int myTeamId = in.nextInt(); // if 0 you need to score on the right of the map, if 1 you need to score on the left
-        int turnNumber = 0;
-
-        geneticParams = List.of(1.0, 10.0, 0.5, 1.0, 1000.0);
+        /* Heuristics:
+         *   1. distance of wizards to snaffles
+         *   2. distance of snaffles to goal
+         *   3. distance of bludgers to wizards
+         *   4. magic score
+         *   5. score score
+         */
+        geneticParams = List.of(1.0, 5.0, 0.1, 1.0, 1000.0);
 
         for (String arg : args) {
             if (arg.startsWith("-params=")) {
@@ -139,9 +166,18 @@ class Player {
                 for (String param : params) {
                     geneticParams.add(Double.parseDouble(param));
                 }
+                System.err.println("Genome: " + String.join(", ", geneticParams.stream().map(d -> d.toString()).toList()));
+            }
+            if (arg.startsWith("-r=")) {
+                String value = arg.substring(3);
+                RATIONALITY_COEFF = Double.parseDouble(value);
+                System.err.println("Rationality: " + String.format("%.2f", RATIONALITY_COEFF));
             }
         }
 
+        Scanner in = new Scanner(System.in);
+        int myTeamId = in.nextInt(); // if 0 you need to score on the right of the map, if 1 you need to score on the left
+        int turnNumber = 0;
 
         // game loop
         while (true) {
