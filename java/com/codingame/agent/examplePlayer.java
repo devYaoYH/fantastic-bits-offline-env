@@ -39,7 +39,7 @@ class Player {
      */
     // Best hand-tuned parameters so far:
     // 2, 800, 0.1, 1, 1000 (~78.13% win-rate against heuristic in 32 games)
-    private static List<Double> geneticParams = List.of(1.0, 5.0, 0.1, 1.0, 1000.0);
+    private static List<Double> geneticParams = List.of(2.0, 800.0, 0.1, 1.0, 1000.0);
 
     // Searching strategy, simultaneous or decoupled
     private static Boolean simultaneousSearching = false;
