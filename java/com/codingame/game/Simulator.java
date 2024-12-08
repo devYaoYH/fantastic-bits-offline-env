@@ -1932,6 +1932,33 @@ public class Simulator extends MultiReferee {
             for (Vector v : radialVectors) {
                 Vector dest = pod.position.add(v.mult(500));
                 actions.add(String.format("THROW %.0f %.0f %d", dest.x, dest.y, 500));
+                if (Math.abs(dest.x - pod.position.x) < 1 && Math.abs(dest.y - pod.position.y) < 1) {
+                    System.err.println("[Simulator] [SNAFFLE THROW] THIS IS NOT ALLOWED!");
+                    throw new RuntimeException("[Simulator] [SNAFFLE THROW] THIS IS NOT ALLOWED!");
+                }
+            }
+            // Generate direct throw towards the goals
+            Vector goalCenters[] = {new Vector(WIDTH, HEIGHT / 2), new Vector(0, HEIGHT / 2)};
+            double distance = pod.position.distance(goalCenters[player.id]);
+            Vector dest;
+            boolean isWithinGoalBounds = false;
+            if (pod.position.y > (HEIGHT - GOAL_SIZE) / 2 + GOAL_RADIUS + SNAFFLE_RADIUS &&
+                pod.position.y < (HEIGHT + GOAL_SIZE) / 2 - GOAL_RADIUS - SNAFFLE_RADIUS) {
+                isWithinGoalBounds = true;
+            }
+            if (distance < 2000 && isWithinGoalBounds) {
+                if (player.id == 0) {
+                    dest = new Vector(WIDTH, pod.position.y);
+                }
+                else {
+                    dest = new Vector(0, pod.position.y);
+                }
+            }
+            else {
+                dest = goalCenters[player.id];
+            }
+            if (dest != null) {
+                actions.add(String.format("THROW %.0f %.0f %d", dest.x, dest.y, 500));
             }
         }
         // Generate movements: if we have a snaffle, throw it!
@@ -1950,6 +1977,8 @@ public class Simulator extends MultiReferee {
                 if (player.magic >= ACCIO_MAGIC) {
                     actions.add(String.format("ACCIO %d", s.id));
                 }
+                // Generate Direct vectors
+                actions.add(String.format("MOVE %.0f %.0f %d", s.position.x, s.position.y, 150));
             }
             // Generate Petrificus
             for (Bludger b : bludgers) {
@@ -1971,6 +2000,32 @@ public class Simulator extends MultiReferee {
         }
 
         return actions;
+    }
+
+    public List<WizardAction> getActionsForSinglePod(boolean isForFirstPod) {
+        Player player = this.players[nextPlayer];
+
+        List<List<String>> podActions = new ArrayList<>();
+
+        for (Pod p : player.pods) {
+            podActions.add(getPodActions(p, player));
+        }
+
+        List<WizardAction> actionPairs = new ArrayList<>();
+        if (isForFirstPod) {
+            String staticAction = podActions.get(1).get(0);
+            for (String s : podActions.get(0)) {
+                actionPairs.add(new WizardAction(s, staticAction));
+            }
+        }
+        else {
+            String staticAction = podActions.get(0).get(0);
+            for (String s : podActions.get(1)) {
+                actionPairs.add(new WizardAction(staticAction, s));
+            }
+        }
+
+        return actionPairs;
     }
 
     @Override

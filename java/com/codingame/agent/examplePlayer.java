@@ -16,10 +16,33 @@ import com.codingame.game.WizardAction;
  **/
 class Player {
 
+    // Random number generater has static seed for testing.
     static Random rand = new Random(0);
+    // Ablation coefficient, agent takes a random action with probability 1-RATIONALITY_COEFF.
     static Double RATIONALITY_COEFF = 1.0;
-    static int ROLLOUT_DEPTH = 1;
+    // If > 0, a rollout is performed with the heuristic state score
+    // taken as reward and discounted by GAMMA each turn.
+    static int ROLLOUT_DEPTH = 0;
+    // The expected value is returned, so an average over the following
+    // number of rollouts.
     static int ROLLOUT_WIDTH = 10;
+    // Future reward discounting factor. We're really uncertain about our
+    // future hence the low gamma value.
+    static Double GAMMA = 0.7;
+
+    /* Heuristics:
+     *   1. distance of wizards to snaffles
+     *   2. distance of snaffles to goal
+     *   3. distance of bludgers to wizards
+     *   4. magic score
+     *   5. score score
+     */
+    // Best hand-tuned parameters so far:
+    // 2, 800, 0.1, 1, 1000 (~78.13% win-rate against heuristic in 32 games)
+    private static List<Double> geneticParams = List.of(1.0, 5.0, 0.1, 1.0, 1000.0);
+
+    // Searching strategy, simultaneous or decoupled
+    private static Boolean simultaneousSearching = false;
 
     // Instrumentation function
     public static void markTime(long startTime) {
@@ -31,7 +54,6 @@ class Player {
         System.err.println("Time taken: " + durationInMillis + " milliseconds");
     }
 
-    private static List<Double> geneticParams;
 
     private static double rollout(GameNode game, int depth) throws IOException {
         // System.err.println(String.format("========== ROLLOUT DEPTH: %d | Player: %b ==========", depth, game.isOptimizingPlayerTurn()));
@@ -42,6 +64,7 @@ class Player {
             // Score state instead.
             return game.getScore(geneticParams);
         }
+        Double curScore = game.getScore(geneticParams);
         List<WizardAction> actions = game.getActions();
         List<String> actionStrings = actions.stream()
                                             .map(a -> a.action1 + "|" + a.action2)
@@ -57,7 +80,7 @@ class Player {
             }
             // System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
         }
-        return rollout(game, depth-1);
+        return curScore + GAMMA * rollout(game, depth-1);
     }
 
     static class TreeNode {
@@ -83,7 +106,7 @@ class Player {
         else return 0;
     };
 
-    private static TreeNode forwardSearch(GameNode game, int depth) throws IOException {
+    private static TreeNode forwardSearch(GameNode game, int depth, boolean isForFirstPod, boolean isSimultaneous) throws IOException {
         // System.err.println(String.format("========== FORWARD SEARCH DEPTH: %d | Player: %b | Team: %d ==========", depth, game.isOptimizingPlayerTurn(), game.getTeamId()));
         if (depth == 0) {
             // Return the current node
@@ -108,7 +131,7 @@ class Player {
                 return new TreeNode(game, totScore / ROLLOUT_WIDTH);
             }
         }
-        List<WizardAction> actions = game.getActions();
+        List<WizardAction> actions = isSimultaneous ? game.getActions() : game.getActions(isForFirstPod);
         // If we are the enemy, select a random action
         if (!game.isOptimizingPlayerTurn()) {
             actions = List.of(actions.get(rand.nextInt(actions.size())));
@@ -139,25 +162,16 @@ class Player {
             if ((newNode.isOptimizingPlayerTurn() && newNode.getTeamId() == 0) ||
                 (!newNode.isOptimizingPlayerTurn() && newNode.getTeamId() == 1)) {
                 // System.err.println("  New round reached.");
-                children.add(forwardSearch(newNode, depth-1));
+                children.add(forwardSearch(newNode, depth-1, isForFirstPod, isSimultaneous));
             }
             else {
-                children.add(forwardSearch(newNode, depth));
+                children.add(forwardSearch(newNode, depth, isForFirstPod, isSimultaneous));
             }
         }
         return children.stream().max(gameTreeComparator).get();
     }
 
     public static void main(String args[]) throws IOException {
-
-        /* Heuristics:
-         *   1. distance of wizards to snaffles
-         *   2. distance of snaffles to goal
-         *   3. distance of bludgers to wizards
-         *   4. magic score
-         *   5. score score
-         */
-        geneticParams = List.of(1.0, 5.0, 0.1, 1.0, 1000.0);
 
         for (String arg : args) {
             if (arg.startsWith("-params=")) {
@@ -251,8 +265,15 @@ class Player {
             init.initializeSimulator(List.of(gameState.toString().split("\n")));
             // double score = rollout(init, 3);
             // System.err.println(String.format("Rollout Score: %.3f", score));
-            WizardAction optimalAction = forwardSearch(init, 1).getActions();
-
+            WizardAction optimalAction;
+            if (simultaneousSearching) {
+                optimalAction = forwardSearch(init, 1, false, true).getActions();
+            }
+            else {
+                WizardAction optimal1Action = forwardSearch(init, 1, true, false).getActions();
+                WizardAction optimal2Action = forwardSearch(init, 1, false, false).getActions();
+                optimalAction = new WizardAction(optimal1Action.action1, optimal2Action.action2);
+            }
             markTime(startTime);
 
             System.out.println(optimalAction.action1);

@@ -228,6 +228,10 @@ public class GameNode {
         return new ArrayList<>(permissibleActions);
     }
 
+    public List<WizardAction> getActions(boolean isForFirstPod) throws IOException, RuntimeException {
+        return simulator.getActionsForSinglePod(isForFirstPod);
+    }
+
     // Simulate one set of actions (both wizards).
     // This will mutate the internals of Simulator and GameNode.
     public double takeAction(WizardAction wa) throws IOException, RuntimeException {
