@@ -65,21 +65,16 @@ class Player {
             return game.getScore(geneticParams);
         }
         Double curScore = game.getScore(geneticParams);
-        List<WizardAction> actions = game.getActions();
-        List<String> actionStrings = actions.stream()
-                                            .map(a -> a.action1 + "|" + a.action2)
-                                            .collect(Collectors.toList());
+        WizardAction randomAction = game.getRandomAction();
         // System.err.println(String.format("[Player] rollout actions: %s", String.join("\n", actionStrings)));
-        if (actions.size() > 0) {
-            try {
-                game.takeAction(actions.get(rand.nextInt(actions.size())));
-            }
-            catch (RuntimeException e) {
-                // This means the game is over
-                return game.getScore(geneticParams);
-            }
-            // System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
+        try {
+            game.takeAction(randomAction);
         }
+        catch (RuntimeException e) {
+            // This means the game is over
+            return game.getScore(geneticParams);
+        }
+        // System.err.println(String.format(" [Player] taken action: %s,%s", actions.get(0).action1, actions.get(0).action2));
         return curScore + GAMMA * rollout(game, depth-1);
     }
 
@@ -131,14 +126,13 @@ class Player {
                 return new TreeNode(game, totScore / ROLLOUT_WIDTH);
             }
         }
-        List<WizardAction> actions = isSimultaneous ? game.getActions() : game.getActions(isForFirstPod);
-        // If we are the enemy, select a random action
-        if (!game.isOptimizingPlayerTurn()) {
-            actions = List.of(actions.get(rand.nextInt(actions.size())));
+        List<WizardAction> actions = new ArrayList<>();
+        // If we are the enemy, select a random action || We're rational up to the coeff degree
+        if (!game.isOptimizingPlayerTurn() || rand.nextDouble() > RATIONALITY_COEFF) {
+            actions = List.of(game.getRandomAction());
         }
-        // We're rational up to the coeff degree
-        else if (rand.nextDouble() > RATIONALITY_COEFF) {
-            actions = List.of(actions.get(rand.nextInt(actions.size())));
+        else {
+            actions = isSimultaneous ? game.getActions() : game.getActions(isForFirstPod);
         }
         // System.err.println(String.format("  Number of actions generated: %d", actions.size()));
         // Branch out into further actions
@@ -186,6 +180,11 @@ class Player {
                 String value = arg.substring(3);
                 RATIONALITY_COEFF = Double.parseDouble(value);
                 System.err.println("Rationality: " + String.format("%.2f", RATIONALITY_COEFF));
+            }
+            if (arg.startsWith("-simul=")) {
+                String value = arg.substring(7);
+                simultaneousSearching = value.equals("true");
+                System.err.println(String.format("Rationality: %b", simultaneousSearching));
             }
         }
 

@@ -116,3 +116,4 @@ Currently this script only tests against the benchmark, but can be trivially mod
 Some other parameters available in our search agent player:
 
 - Rationality parameter (e.g.): `-r=0.9`
+- Simultaneous forward search: `-simul=true`

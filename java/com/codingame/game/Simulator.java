@@ -1919,6 +1919,17 @@ public class Simulator extends MultiReferee {
         return vectors;
     }
 
+    // TODO: need to rewrite the random action choice selection to be more efficient.
+    public String getRandomPodAction(Pod pod, Player player) {
+        Double randomRadianAngle = random.nextDouble() * 2 * Math.PI;
+        double x = Math.cos(randomRadianAngle);
+        double y = Math.sin(randomRadianAngle);
+        if (pod.snaffle != null) {
+            return String.format("THROW %.0f %.0f %d", x + pod.position.x, y + pod.position.y, 500);
+        }
+        return String.format("MOVE %.0f %.0f %d", x + pod.position.x, y + pod.position.y, 150);
+    }
+
     private List<String> getPodActions(Pod pod, Player player) {
         List<String> actions = new ArrayList<>();
 
@@ -2046,6 +2057,14 @@ public class Simulator extends MultiReferee {
         }
 
         return data.toArray(new String[data.size()]);
+    }
+
+    public WizardAction getRandomWizardActionForPlayer() {
+        WizardAction wa = new WizardAction("", "");
+        Player player = this.players[nextPlayer];
+        wa.action1 = getRandomPodAction(player.pods.get(0), player);
+        wa.action2 = getRandomPodAction(player.pods.get(1), player);
+        return wa;
     }
 
     @Override

@@ -232,6 +232,10 @@ public class GameNode {
         return simulator.getActionsForSinglePod(isForFirstPod);
     }
 
+    public WizardAction getRandomAction() {
+        return simulator.getRandomWizardActionForPlayer();
+    }
+
     // Simulate one set of actions (both wizards).
     // This will mutate the internals of Simulator and GameNode.
     public double takeAction(WizardAction wa) throws IOException, RuntimeException {
